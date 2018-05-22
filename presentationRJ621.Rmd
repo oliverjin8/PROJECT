@@ -1,0 +1,138 @@
+---
+title: "Cycles and Forecasting of Hawaiin Hotel Occupancy Presentation"
+author: "Ran Jin"
+date: "4/13/2018"
+output:
+  beamer_presentation: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(astsa)
+require(quantmod)
+require(timeSeries)
+require(knitr)
+require(forecast)
+require(tseries)
+```
+
+## Background and Key Question
+
+Understanding the dynamics and forecasting the Hawaiin hotel room occupancy is essential to better control a budget for a trip. 
+
+Key Questions:
+
+- Is there a predominant cycle present in the Hawaiian hotel occupancy rate change? 
+
+- What are the forecast, and forecast error bounds for the Hawaiin hotel occupany rate change for the next 3 years?
+
+To better address these questions, a time series model will be developed. In addition, since it is a quarterly data, I will also develop a model based spectral density estimate, which will address possible cycles in the data. 
+
+## Data: Definition, Aquisition and Exploration
+
+I am using the Quarterly Hawaiian hotel occupancy rate change from 1982-I to 2015-IV from the *astsa* package. It is defined as a ts object. 
+
+##Plot1
+```{r}
+dhor<-diff(hor)
+ts.plot(dhor, main="Quarterly Hawaiian hotel occupancy rate change")
+
+```
+
+##Plot2
+```{r}
+seasonplot(dhor)
+```
+
+## ACF and PACF 
+```{r}
+invisible(astsa::acf2(dhor,40))
+```
+
+## Modeling Recruitment
+```{r}
+recfit0<-invisible(astsa::sarima(dhor,p=4,d=0,q=0,
+                                 no.constant=FALSE, 
+                                 details=F))
+recfit1<-invisible(astsa::sarima(dhor,p=4,d=0,q=1,
+                                 no.constant=FALSE, 
+                                 details=F))
+recfit2<-invisible(astsa::sarima(dhor,p=4,d=0,q=2,
+                                 no.constant=FALSE, 
+                                 details=F))
+recfit3<-invisible(astsa::sarima(dhor,p=4,d=0,q=3,
+                                 no.constant=FALSE, 
+                                 details=F))
+recfit4<-invisible(astsa::sarima(dhor,p=4,d=0,q=4,
+                                 no.constant=FALSE, 
+                                 details=F))
+```
+
+## Comparison
+ARIMA(4,0,4) is the best model here.
+```{r}
+BIC<-c(recfit0$BIC,recfit1$BIC,recfit2$BIC,
+       recfit3$BIC,recfit4$BIC)
+AIC<-c(recfit0$AIC,recfit1$AIC,recfit2$AIC,
+       recfit3$AIC,recfit4$AIC)
+chart<-cbind(BIC,AIC)
+rownames(chart) <- c('ARIMA(4,0,0)','ARIMA(4,0,1)',
+                     'ARIMA(4,0,2)','ARIMA(4,0,3)',
+                     'ARIMA(4,0,4)')
+as.table(chart)
+```
+
+## With seasonal Component
+```{r}
+recfitar<-invisible(astsa::sarima(dhor,p=4,d=0,q=4,
+                                  P=1,S=4,no.constant=F,
+                                  details=F))
+recfitma<-invisible(astsa::sarima(dhor,p=4,d=0,q=4,
+                                  S=4,Q=1,no.constant=F,
+                                  details=F))
+recfit11<-invisible(astsa::sarima(dhor,p=4,d=0,q=4,
+                                  P=1,S=4,Q=1,
+                                  no.constant=FALSE,
+                                  details=F))
+```
+
+## Comparison
+ARIMA(4,0,4)xAR(1)[4] is the best fitted model here.
+```{r}
+BIC<-c(recfitar$BIC,recfitma$BIC,recfit11$BIC)
+AIC<-c(recfitar$AIC,recfitma$AIC,recfit11$AIC)
+AICc<-c(recfitar$AICc,recfitma$AICc,recfit11$AICc)
+chart<-cbind(BIC,AIC)
+chart<-cbind(chart,AICc)
+rownames(chart) <- c('ARIMA(4,0,4)xAR(1)[4]',
+                     'ARIMA(4,0,4)xMA(1)[4]',
+                     'ARIMA(4,0,2)xARMA(1,1)[4]')
+as.table(chart)
+```
+
+## Model Estimation
+```{r}
+kable(recfitar$ttable, caption=
+        "SARIMA(4,0,4)x(1,0,0)[4] Parameter Estimates")
+```
+
+## What is the predominant period?
+
+```{r}
+sa <- spec.pgram(dhor,log='no')
+text(frequency(dhor)*0.45, 600, substitute(omega==1/2))
+```
+
+## Forecasting 2016-2018
+
+```{r}
+sarima.for(dhor,n.ahead=12,p=4,d=0,q=4,P=1,S=4,Q=0)
+```
+
+## Summary Conclusions
+-The temporal dynamics of the occupancy rate of Hawaiin hotels is well captured by a seasonal model ARIMA(4,0,4)xAR(1)[4].
+
+-We also found the predominant cycle the occupancy rate change series, as indicated by the estimate of the spectral density. 
+
+-Forecasts predict the near term behavior of the series (3 years ahead). And we see that the longterm forecasts oscillates around the estimated mean of the process, as expected. 
